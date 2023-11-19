@@ -22,23 +22,49 @@
 // @Field: Est: Type of estimator used
 
 // precision landing logging
+// struct PACKED log_Precland {
+//     LOG_PACKET_HEADER;
+//     uint64_t time_us;
+//     uint8_t healthy;
+//     uint8_t target_acquired;
+//     float pos_x;
+//     float pos_y;
+//     float vel_x;
+//     float vel_y;
+//     float meas_x;
+//     float meas_y;
+//     float meas_z;
+//     uint32_t last_meas;
+//     uint32_t ekf_outcount;
+//     uint8_t estimator;
+// };
+
+// #define LOG_STRUCTURE_FROM_PRECLAND                                     \
+//     { LOG_PRECLAND_MSG, sizeof(log_Precland),                           \
+//       "PL",    "QBBfffffffIIB",    "TimeUS,Heal,TAcq,pX,pY,vX,vY,mX,mY,mZ,LastMeasMS,EKFOutl,Est", "s--mmnnmmms--","F--BBBBBBBC--" , true },
+
+// tejal
 struct PACKED log_Precland {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    uint8_t healthy;
-    uint8_t target_acquired;
     float pos_x;
     float pos_y;
     float vel_x;
     float vel_y;
     float meas_x;
     float meas_y;
-    float meas_z;
-    uint32_t last_meas;
-    uint32_t ekf_outcount;
-    uint8_t estimator;
+    float target_pos_x;
+    float target_pos_y;
+    float target_vel_x;
+    float target_vel_y;
+    float xypos_var;
+    float kalman_estimated_rel_pos_x;
+    float kalman_estimated_rel_pos_y;
+    float kalman_estimated_rel_vel_x;
+    float kalman_estimated_rel_vel_y;
 };
 
 #define LOG_STRUCTURE_FROM_PRECLAND                                     \
     { LOG_PRECLAND_MSG, sizeof(log_Precland),                           \
-      "PL",    "QBBfffffffIIB",    "TimeUS,Heal,TAcq,pX,pY,vX,vY,mX,mY,mZ,LastMeasMS,EKFOutl,Est", "s--mmnnmmms--","F--BBBBBBBC--" , true },
+      "PL",    "Qfffffffffffffff",    "TimeUS,pX,pY,vX,vY,mX,mY,tPx,tPy,tVx,tVy,xyvar,kPx,kPy,kVx,kVy", "smmnnmmmmnnmmmnn","FBBBBBBBBBBBBBBB" , true },
+
