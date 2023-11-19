@@ -206,6 +206,13 @@ private:
 
     Vector2f                    _target_vel_drone;
     float                       _xypos_var;
+    
+    // low pass filter
+    Vector2f                    _low_pass_filteredXY_prev;
+    Vector2f                    _low_pass_targetXY_prev;
+    bool                        _low_pass_init_bool;
+    Vector2f                    _low_pass_filteredXY;
+    Vector2f                    _low_pass_filteredXYvel;
 
 
     // structure and buffer to hold a history of vehicle velocity

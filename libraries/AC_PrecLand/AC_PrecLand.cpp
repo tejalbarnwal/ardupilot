@@ -479,7 +479,7 @@ void AC_PrecLand::handle_msg(const mavlink_landing_target_t &packet, uint32_t ti
 {
     // run backend update
     if (_backend != nullptr) {
-        gcs().send_text(MAV_SEVERITY_INFO, "Plnd: handled messages0.5");
+        gcs().send_text(MAV_SEVERITY_INFO, "Plnd: handled messages 0");
         _backend->handle_msg(packet, timestamp_ms);
     }
 }
@@ -494,6 +494,7 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
 
     switch ((EstimatorType)_estimator_type.get()) {
         case EstimatorType::RAW_SENSOR: {
+            // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: raw sensor estimator");
             // Return if there's any invalid velocity data
             for (uint8_t i=0; i<_inertial_history->available(); i++) {
                 const struct inertial_data_frame_s *inertial_data = (*_inertial_history)[i];
@@ -505,10 +506,14 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
 
             // Predict
             if (target_acquired()) {
-                _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
-                _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
-                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                _target_pos_rel_est_NE.x += _target_vel_rel_est_NE.x * inertial_data_delayed->dt;
+                _target_pos_rel_est_NE.y += _target_vel_rel_est_NE.y * inertial_data_delayed->dt;
+                _target_vel_rel_est_NE.x = _target_vel_rel_est_NE.x;
+                _target_vel_rel_est_NE.y = _target_vel_rel_est_NE.y;
+                // _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
+                // _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
+                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
             }
 
             // Update if a new Line-Of-Sight measurement is available
@@ -517,10 +522,47 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
                     gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: Target Found");
                     _estimator_initialized = true;
                 }
-                _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
-                _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
-                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+
+                float a0 = 0.96906992;
+                float b0 = 0.01546504;
+                float b1 = 0.01546504;
+                
+                if(!_low_pass_init_bool)
+                {
+                    _low_pass_filteredXY_prev.x = _target_pos_rel_meas_NED.x;
+                    _low_pass_filteredXY_prev.y = _target_pos_rel_meas_NED.y;
+                    _low_pass_init_bool = true;
+                    // _last_update_ms = AP_HAL::millis();
+                }
+                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: low pass filter");
+
+                
+                // // apply filter
+                _low_pass_filteredXY.x = a0 * _low_pass_filteredXY_prev.x + b0 * _target_pos_rel_meas_NED.x + b1 * _low_pass_targetXY_prev.x;
+                _low_pass_filteredXY.y = a0 * _low_pass_filteredXY_prev.y + b0 * _target_pos_rel_meas_NED.y + b1 * _low_pass_targetXY_prev.y;
+    
+                _low_pass_filteredXYvel.x = (_low_pass_filteredXY.x - _low_pass_filteredXY_prev.x) / (0.04);
+                _low_pass_filteredXYvel.y = (_low_pass_filteredXY.y - _low_pass_filteredXY_prev.y) / (0.04);
+
+                // // apply values
+                _target_pos_rel_est_NE.x = _low_pass_filteredXY.x;
+                _target_pos_rel_est_NE.y = _low_pass_filteredXY.y;
+                _target_vel_rel_est_NE.x = _low_pass_filteredXYvel.x;
+                _target_vel_rel_est_NE.y = _low_pass_filteredXYvel.y;
+                
+
+                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: update prev values");
+                
+                // // update prev values
+                _low_pass_filteredXY_prev.x = _low_pass_filteredXY.x;
+                _low_pass_filteredXY_prev.y = _low_pass_filteredXY.y;
+                _low_pass_targetXY_prev.x = _target_pos_rel_meas_NED.x;
+                _low_pass_targetXY_prev.y = _target_pos_rel_meas_NED.y;
+                
+                // _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
+                // _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
+                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
 
                 _last_update_ms = AP_HAL::millis();
                 _target_acquired = true;
@@ -648,6 +690,7 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
 {
     Vector3f target_vec_unit_body;
     if (retrieve_los_meas(target_vec_unit_body)) {
+        // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: retrive los complete1");
         const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
         // gcs().send_text(MAV_SEVERITY_INFO, "target vec valid before bool? %5.3f", (double)(target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body)));
         const bool target_vec_valid = target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body) > 0.0f;
@@ -689,9 +732,11 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
                 _last_target_pos_rel_origin_NED.z = pos_NED.z;
                 _last_vehicle_pos_NED = pos_NED;
             }
+            gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: retrive los complete2");
             return true;
         }
     }
+    // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: retrive los complete3");
     return false;
 }
 
@@ -798,10 +843,10 @@ void AC_PrecLand::Write_Precland()
         target_vel_x    : target_vel_drone.x,
         target_vel_y    : target_vel_drone.y,
         xypos_var       : _xypos_var,
-        kalman_estimated_rel_pos_x         :  _ekf_x.getPos(),
-        kalman_estimated_rel_pos_y         :  _ekf_y.getPos(),
-        kalman_estimated_rel_vel_x         :  _ekf_x.getVel(),
-        kalman_estimated_rel_vel_y         :  _ekf_y.getVel()
+        kalman_estimated_rel_pos_x         :  _target_pos_rel_est_NE.x,
+        kalman_estimated_rel_pos_y         :  _target_pos_rel_est_NE.y,
+        kalman_estimated_rel_vel_x         :  _target_vel_rel_est_NE.x,
+        kalman_estimated_rel_vel_y         :  _target_vel_rel_est_NE.y
     };
     AP::logger().WriteBlock(&pkt, sizeof(pkt));
 }
