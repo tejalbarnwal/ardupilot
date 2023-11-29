@@ -625,12 +625,12 @@ struct PACKED log_PSCx {
     uint64_t time_us;
     float pos_target;
     float pos;
-    float vel_desired;
     float vel_target;
     float vel;
-    float accel_desired;
     float accel_target;
     float accel;
+    float user_time_diff;
+    float user_target_diff;
 };
 
 // thread stack usage
@@ -697,7 +697,7 @@ struct PACKED log_VER {
 #define PID_MULTS  "F----------"
 
 #define PIDx_FMT "Qffffffff"
-#define PIDx_UNITS "smmnnnooo"
+#define PIDx_UNITS "smmnnoomm"
 #define PIDx_MULTS "F00000000"
 
 // @LoggerMessage: ADSB
@@ -1331,11 +1331,11 @@ LOG_STRUCTURE_FROM_VISUALODOM \
     { LOG_WINCH_MSG, sizeof(log_Winch), \
       "WINC", "QBBBBBfffHfb", "TimeUS,Heal,ThEnd,Mov,Clut,Mode,DLen,Len,DRate,Tens,Vcc,Temp", "s-----mmn?vO", "F-----000000" }, \
     { LOG_PSCN_MSG, sizeof(log_PSCx), \
-      "PSCN", PIDx_FMT, "TimeUS,TPN,PN,DVN,TVN,VN,DAN,TAN,AN", PIDx_UNITS, PIDx_MULTS }, \
+      "PSCN", PIDx_FMT, "TimeUS,TPN,PN,TVN,VN,TAN,AN,UTimedN,UTardN", PIDx_UNITS, PIDx_MULTS }, \
     { LOG_PSCE_MSG, sizeof(log_PSCx), \
-      "PSCE", PIDx_FMT, "TimeUS,TPE,PE,DVE,TVE,VE,DAE,TAE,AE", PIDx_UNITS, PIDx_MULTS }, \
+      "PSCE", PIDx_FMT, "TimeUS,TPE,PE,TVE,VE,TAE,AE,UTimedE,UTardE", PIDx_UNITS, PIDx_MULTS }, \
     { LOG_PSCD_MSG, sizeof(log_PSCx), \
-      "PSCD", PIDx_FMT, "TimeUS,TPD,PD,DVD,TVD,VD,DAD,TAD,AD", PIDx_UNITS, PIDx_MULTS }, \
+      "PSCD", PIDx_FMT, "TimeUS,TPD,PD,TVD,VD,TAD,AD,UTimedD,UTardD", PIDx_UNITS, PIDx_MULTS }, \
     { LOG_STAK_MSG, sizeof(log_STAK), \
       "STAK", "QBBHHN", "TimeUS,Id,Pri,Total,Free,Name", "s#----", "F-----", true }, \
     { LOG_FILE_MSG, sizeof(log_File), \

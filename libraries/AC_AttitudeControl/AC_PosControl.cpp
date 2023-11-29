@@ -557,12 +557,23 @@ void AC_PosControl::input_vel_accel_xy(Vector2f& vel, const Vector2f& accel, boo
 ///     The parameter limit_output specifies if the velocity and acceleration limits are applied to the sum of commanded and correction values or just correction.
 void AC_PosControl::input_pos_vel_accel_xy(Vector2p& pos, Vector2f& vel, const Vector2f& accel, bool limit_output)
 {
+    uint32_t time1 = AP_HAL::millis();
+    user_pos.x = pos.x;
+    user_pos.y = pos.y;
+    user_pos.z = 0.0;
+
     update_pos_vel_accel_xy(_pos_target.xy(), _vel_desired.xy(), _accel_desired.xy(), _dt, _limit_vector.xy(), _p_pos_xy.get_error(), _pid_vel_xy.get_error());
 
     shape_pos_vel_accel_xy(pos, vel, accel, _pos_target.xy(), _vel_desired.xy(), _accel_desired.xy(),
                            _vel_max_xy_cms, _accel_max_xy_cmss, _jerk_max_xy_cmsss, _dt, limit_output);
 
     update_pos_vel_accel_xy(pos, vel, accel, _dt, Vector2f(), Vector2f(), Vector2f());
+
+    user_time_diff = (AP_HAL::millis() - time1) * 1.0;
+    user_pos_diff.x = user_pos.x - _pos_target.x;
+    user_pos_diff.y = user_pos.y - _pos_target.y;
+    user_pos_diff.z = user_pos.z - _pos_target.z;
+
 }
 
 /// stop_pos_xy_stabilisation - sets the target to the current position to remove any position corrections from the system
@@ -1135,17 +1146,17 @@ void AC_PosControl::write_log()
         float accel_x, accel_y;
         lean_angles_to_accel_xy(accel_x, accel_y);
         AP::logger().Write_PSCN(get_pos_target_cm().x, _inav.get_position_neu_cm().x,
-                                get_vel_desired_cms().x, get_vel_target_cms().x, _inav.get_velocity_neu_cms().x,
-                                _accel_desired.x, get_accel_target_cmss().x, accel_x);
+                                get_vel_target_cms().x, _inav.get_velocity_neu_cms().x,
+                                get_accel_target_cmss().x, accel_x, user_time_diff, user_pos_diff.x);
         AP::logger().Write_PSCE(get_pos_target_cm().y, _inav.get_position_neu_cm().y,
-                                get_vel_desired_cms().y, get_vel_target_cms().y, _inav.get_velocity_neu_cms().y,
-                                _accel_desired.y, get_accel_target_cmss().y, accel_y);
+                                get_vel_target_cms().y, _inav.get_velocity_neu_cms().y,
+                                get_accel_target_cmss().y, accel_y, user_time_diff, user_pos_diff.y);
     }
 
     if (is_active_z()) {
         AP::logger().Write_PSCD(-get_pos_target_cm().z, -_inav.get_position_z_up_cm(),
-                                -get_vel_desired_cms().z, -get_vel_target_cms().z, -_inav.get_velocity_z_up_cms(),
-                                -_accel_desired.z, -get_accel_target_cmss().z, -get_z_accel_cmss());
+                                -get_vel_target_cms().z, -_inav.get_velocity_z_up_cms(),
+                                -get_accel_target_cmss().z, -get_z_accel_cmss(), user_time_diff, user_pos_diff.z);
     }
 }
 

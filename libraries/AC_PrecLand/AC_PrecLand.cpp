@@ -218,10 +218,11 @@ void AC_PrecLand::init(uint16_t update_rate_hz)
 
     // create inertial history buffer
     // constrain lag parameter to be within bounds
-    _lag.set(constrain_float(_lag, 0.02f, 0.25f));
+    _lag.set(constrain_float(_lag, 0.02f, 0.5f));
 
     // calculate inertial buffer size from lag and minimum of main loop rate and update_rate_hz argument
     const uint16_t inertial_buffer_size = MAX((uint16_t)roundf(_lag * MIN(update_rate_hz, AP::scheduler().get_loop_rate_hz())), 1);
+    gcs().send_text(MAV_SEVERITY_INFO, "buffer size? %5.3f", (double)(inertial_buffer_size));
 
     // instantiate ring buffer to hold inertial history, return on failure so no backends are created
     _inertial_history = new ObjectArray<inertial_data_frame_s>(inertial_buffer_size);
@@ -453,12 +454,12 @@ void AC_PrecLand::get_target_velocity_cms(const Vector2f& vehicle_velocity_cms, 
         target_vel_cms.zero();
         return;
     }
-    // if ((EstimatorType)_estimator_type.get() == EstimatorType::RAW_SENSOR) {
-    //     // We do not predict the velocity of the target in this case
-    //     // assume velocity to be zero
-    //     target_vel_cms.zero();
-    //     return;
-    // }
+    if ((EstimatorType)_estimator_type.get() == EstimatorType::RAW_SENSOR) {
+        // We do not predict the velocity of the target in this case
+        // assume velocity to be zero
+        target_vel_cms.zero();
+        return;
+    }
     Vector2f target_vel_rel_cms;
     if (!get_target_velocity_relative_cms(target_vel_rel_cms)) {
         // Don't know where the target is
@@ -505,16 +506,16 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
             }
 
             // Predict
-            if (target_acquired()) {
-                _target_pos_rel_est_NE.x += _target_vel_rel_est_NE.x * inertial_data_delayed->dt;
-                _target_pos_rel_est_NE.y += _target_vel_rel_est_NE.y * inertial_data_delayed->dt;
-                _target_vel_rel_est_NE.x = _target_vel_rel_est_NE.x;
-                _target_vel_rel_est_NE.y = _target_vel_rel_est_NE.y;
-                // _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
-                // _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
-                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
-            }
+            // if (target_acquired()) {
+            //     // _target_pos_rel_est_NE.x += _target_vel_rel_est_NE.x * inertial_data_delayed->dt;
+            //     // _target_pos_rel_est_NE.y += _target_vel_rel_est_NE.y * inertial_data_delayed->dt;
+            //     // _target_vel_rel_est_NE.x = _target_vel_rel_est_NE.x;
+            //     // _target_vel_rel_est_NE.y = _target_vel_rel_est_NE.y;
+            //     _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
+            //     _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
+            //     _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+            //     _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+            // }
 
             // Update if a new Line-Of-Sight measurement is available
             if (construct_pos_meas_using_rangefinder(rangefinder_alt_m, rangefinder_alt_valid)) {
@@ -523,46 +524,46 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
                     _estimator_initialized = true;
                 }
 
-                float a0 = 0.96906992;
-                float b0 = 0.01546504;
-                float b1 = 0.01546504;
+                // float a0 = 0.96906992;
+                // float b0 = 0.01546504;
+                // float b1 = 0.01546504;
                 
-                if(!_low_pass_init_bool)
-                {
-                    _low_pass_filteredXY_prev.x = _target_pos_rel_meas_NED.x;
-                    _low_pass_filteredXY_prev.y = _target_pos_rel_meas_NED.y;
-                    _low_pass_init_bool = true;
-                    // _last_update_ms = AP_HAL::millis();
-                }
-                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: low pass filter");
+                // if(!_low_pass_init_bool)
+                // {
+                //     _low_pass_filteredXY_prev.x = _target_pos_rel_meas_NED.x;
+                //     _low_pass_filteredXY_prev.y = _target_pos_rel_meas_NED.y;
+                //     _low_pass_init_bool = true;
+                //     // _last_update_ms = AP_HAL::millis();
+                // }
+                // // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: low pass filter");
 
                 
-                // // apply filter
-                _low_pass_filteredXY.x = a0 * _low_pass_filteredXY_prev.x + b0 * _target_pos_rel_meas_NED.x + b1 * _low_pass_targetXY_prev.x;
-                _low_pass_filteredXY.y = a0 * _low_pass_filteredXY_prev.y + b0 * _target_pos_rel_meas_NED.y + b1 * _low_pass_targetXY_prev.y;
+                // // // apply filter
+                // _low_pass_filteredXY.x = a0 * _low_pass_filteredXY_prev.x + b0 * _target_pos_rel_meas_NED.x + b1 * _low_pass_targetXY_prev.x;
+                // _low_pass_filteredXY.y = a0 * _low_pass_filteredXY_prev.y + b0 * _target_pos_rel_meas_NED.y + b1 * _low_pass_targetXY_prev.y;
     
-                _low_pass_filteredXYvel.x = (_low_pass_filteredXY.x - _low_pass_filteredXY_prev.x) / (0.04);
-                _low_pass_filteredXYvel.y = (_low_pass_filteredXY.y - _low_pass_filteredXY_prev.y) / (0.04);
+                // _low_pass_filteredXYvel.x = (_low_pass_filteredXY.x - _low_pass_filteredXY_prev.x) / (0.04);
+                // _low_pass_filteredXYvel.y = (_low_pass_filteredXY.y - _low_pass_filteredXY_prev.y) / (0.04);
 
-                // // apply values
-                _target_pos_rel_est_NE.x = _low_pass_filteredXY.x;
-                _target_pos_rel_est_NE.y = _low_pass_filteredXY.y;
-                _target_vel_rel_est_NE.x = _low_pass_filteredXYvel.x;
-                _target_vel_rel_est_NE.y = _low_pass_filteredXYvel.y;
+                // // // apply values
+                // _target_pos_rel_est_NE.x = _low_pass_filteredXY.x;
+                // _target_pos_rel_est_NE.y = _low_pass_filteredXY.y;
+                // _target_vel_rel_est_NE.x = _low_pass_filteredXYvel.x;
+                // _target_vel_rel_est_NE.y = _low_pass_filteredXYvel.y;
                 
 
-                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: update prev values");
+                // // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: update prev values");
                 
-                // // update prev values
-                _low_pass_filteredXY_prev.x = _low_pass_filteredXY.x;
-                _low_pass_filteredXY_prev.y = _low_pass_filteredXY.y;
-                _low_pass_targetXY_prev.x = _target_pos_rel_meas_NED.x;
-                _low_pass_targetXY_prev.y = _target_pos_rel_meas_NED.y;
+                // // // update prev values
+                // _low_pass_filteredXY_prev.x = _low_pass_filteredXY.x;
+                // _low_pass_filteredXY_prev.y = _low_pass_filteredXY.y;
+                // _low_pass_targetXY_prev.x = _target_pos_rel_meas_NED.x;
+                // _low_pass_targetXY_prev.y = _target_pos_rel_meas_NED.y;
                 
-                // _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
-                // _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
-                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
+                _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
+                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
 
                 _last_update_ms = AP_HAL::millis();
                 _target_acquired = true;

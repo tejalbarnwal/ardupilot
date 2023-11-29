@@ -396,6 +396,14 @@ public:
 
     static const struct AP_Param::GroupInfo var_info[];
 
+    // tejal added
+    Vector3p user_pos_diff;
+    Vector3p user_pos;
+    float user_time_diff;
+    //     const uint32_t now = AP_HAL::millis();
+    // +                // float delta_time = (now - _last_update_ms) * 1.0e-3f;
+    
+
 protected:
 
     // get throttle using vibration-resistant calculation (uses feed forward with manually calculated gain)
