@@ -35,6 +35,8 @@ public:
     // returns distance to target in meters (0 means distance is not known)
     float distance_to_target() override { return _distance_to_target; }
 
+    bool get_relative_velocity(Vector3f &relative_vel_body) override;
+
 private:
     SITL::SIM           *_sitl;                 // sitl instance pointer
     Vector3f            _los_meas_body;         // unit vector in body frame pointing towards target

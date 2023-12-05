@@ -54,4 +54,9 @@ bool AC_PrecLand_SITL::get_los_body(Vector3f& ret) {
     return true;
 }
 
+bool AC_PrecLand_SITL::get_relative_velocity(Vector3f& ret){
+    return false;
+}
+
+
 #endif

@@ -542,12 +542,12 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
             }
 
             // Predict
-            if (target_acquired()) {
-                _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
-                _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
-                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
-            }
+            // if (target_acquired()) {
+            //     _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
+            //     _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
+            //     _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+            //     _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+            // }
 
             // Update if a new Line-Of-Sight measurement is available
             if (construct_pos_meas_using_rangefinder(rangefinder_alt_m, rangefinder_alt_valid)) {
@@ -557,8 +557,10 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
                 }   
                 _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
                 _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
-                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                _target_vel_rel_est_NE.x = _target_vel_rel_meas_NED.x;
+                _target_vel_rel_est_NE.y = _target_vel_rel_meas_NED.y;
 
                 _last_update_ms = AP_HAL::millis();
                 _target_acquired = true;
@@ -685,7 +687,9 @@ bool AC_PrecLand::retrieve_los_meas(Vector3f& target_vec_unit_body)
 bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, bool rangefinder_alt_valid)
 {
     Vector3f target_vec_unit_body;
+    Vector3f target_relative_vel_body;
     if (retrieve_los_meas(target_vec_unit_body)) {
+        _backend->get_relative_velocity(target_relative_vel_body);
 
         // const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
         
@@ -703,6 +707,7 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
             } 
             // Compute target position relative to IMU
             _target_pos_rel_meas_NED = (target_vec_unit_ned * dist_to_target) ;
+            _target_vel_rel_meas_NED = target_relative_vel_body;
 
             // store the current relative down position so that if we need to retry landing, we know at this height landing target can be found
             const AP_AHRS &_ahrs = AP::ahrs();
@@ -728,38 +733,38 @@ void AC_PrecLand::run_output_prediction()
     // gcs().send_text(MAV_SEVERITY_INFO, "plnd1: target pose rel out NE Y: %5.3f", (double)(_target_pos_rel_out_NE[1]));
 
     // Predict forward from delayed time horizon
-    for (uint8_t i=1; i<_inertial_history->available(); i++) {
-        const struct inertial_data_frame_s *inertial_data = (*_inertial_history)[i];
-        _target_vel_rel_out_NE.x -= inertial_data->correctedVehicleDeltaVelocityNED.x;
-        _target_vel_rel_out_NE.y -= inertial_data->correctedVehicleDeltaVelocityNED.y;
-        _target_pos_rel_out_NE.x += _target_vel_rel_out_NE.x * inertial_data->dt;
-        _target_pos_rel_out_NE.y += _target_vel_rel_out_NE.y * inertial_data->dt;
-    }
+    // for (uint8_t i=1; i<_inertial_history->available(); i++) {
+    //     const struct inertial_data_frame_s *inertial_data = (*_inertial_history)[i];
+    //     _target_vel_rel_out_NE.x -= inertial_data->correctedVehicleDeltaVelocityNED.x;
+    //     _target_vel_rel_out_NE.y -= inertial_data->correctedVehicleDeltaVelocityNED.y;
+    //     _target_pos_rel_out_NE.x += _target_vel_rel_out_NE.x * inertial_data->dt;
+    //     _target_pos_rel_out_NE.y += _target_vel_rel_out_NE.y * inertial_data->dt;
+    // }
 
-    const AP_AHRS &_ahrs = AP::ahrs();
+    // const AP_AHRS &_ahrs = AP::ahrs();
 
-    const Matrix3f& Tbn = (*_inertial_history)[_inertial_history->available()-1]->Tbn;
-    Vector3f accel_body_offset = AP::ins().get_imu_pos_offset(_ahrs.get_primary_accel_index());
+    // const Matrix3f& Tbn = (*_inertial_history)[_inertial_history->available()-1]->Tbn;
+    // Vector3f accel_body_offset = AP::ins().get_imu_pos_offset(_ahrs.get_primary_accel_index());
 
     // Apply position correction for CG offset from IMU
-    Vector3f imu_pos_ned = Tbn * accel_body_offset;
-    _target_pos_rel_out_NE.x += imu_pos_ned.x;
-    _target_pos_rel_out_NE.y += imu_pos_ned.y;
+    // Vector3f imu_pos_ned = Tbn * accel_body_offset;
+    // _target_pos_rel_out_NE.x += imu_pos_ned.x;
+    // _target_pos_rel_out_NE.y += imu_pos_ned.y;
 
     // Apply position correction for body-frame horizontal camera offset from CG, so that vehicle lands lens-to-target
-    Vector3f cam_pos_horizontal_ned = Tbn * Vector3f(_cam_offset.get().x, _cam_offset.get().y, 0);
-    _target_pos_rel_out_NE.x -= cam_pos_horizontal_ned.x;
-    _target_pos_rel_out_NE.y -= cam_pos_horizontal_ned.y;
+    // Vector3f cam_pos_horizontal_ned = Tbn * Vector3f(_cam_offset.get().x, _cam_offset.get().y, 0);
+    // _target_pos_rel_out_NE.x -= cam_pos_horizontal_ned.x;
+    // _target_pos_rel_out_NE.y -= cam_pos_horizontal_ned.y;
 
     // Apply velocity correction for IMU offset from CG
-    Vector3f vel_ned_rel_imu = Tbn * (_ahrs.get_gyro() % (-accel_body_offset));
-    _target_vel_rel_out_NE.x -= vel_ned_rel_imu.x;
-    _target_vel_rel_out_NE.y -= vel_ned_rel_imu.y;
+    // Vector3f vel_ned_rel_imu = Tbn * (_ahrs.get_gyro() % (-accel_body_offset));
+    // _target_vel_rel_out_NE.x -= vel_ned_rel_imu.x;
+    // _target_vel_rel_out_NE.y -= vel_ned_rel_imu.y;
 
     // Apply land offset
-    Vector3f land_ofs_ned_m = _ahrs.get_rotation_body_to_ned() * Vector3f(_land_ofs_cm_x,_land_ofs_cm_y,0) * 0.01f;
-    _target_pos_rel_out_NE.x += land_ofs_ned_m.x;
-    _target_pos_rel_out_NE.y += land_ofs_ned_m.y;
+    // Vector3f land_ofs_ned_m = _ahrs.get_rotation_body_to_ned() * Vector3f(_land_ofs_cm_x,_land_ofs_cm_y,0) * 0.01f;
+    // _target_pos_rel_out_NE.x += land_ofs_ned_m.x;
+    // _target_pos_rel_out_NE.y += land_ofs_ned_m.y;
 
     // store the landing target as a offset from current position. This is used in landing retry
     Vector2f last_target_loc_rel_origin_2d;
