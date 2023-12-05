@@ -218,10 +218,11 @@ void AC_PrecLand::init(uint16_t update_rate_hz)
 
     // create inertial history buffer
     // constrain lag parameter to be within bounds
-    _lag.set(constrain_float(_lag, 0.02f, 0.25f));
+    _lag.set(constrain_float(_lag, 0.0f, 0.25f));
 
     // calculate inertial buffer size from lag and minimum of main loop rate and update_rate_hz argument
     const uint16_t inertial_buffer_size = MAX((uint16_t)roundf(_lag * MIN(update_rate_hz, AP::scheduler().get_loop_rate_hz())), 1);
+    gcs().send_text(MAV_SEVERITY_INFO, "buffer size? %5.3f", (double)(inertial_buffer_size));
 
     // instantiate ring buffer to hold inertial history, return on failure so no backends are created
     _inertial_history = new ObjectArray<inertial_data_frame_s>(inertial_buffer_size);
@@ -474,6 +475,42 @@ void AC_PrecLand::get_target_velocity_cms(const Vector2f& vehicle_velocity_cms, 
     _target_vel_drone.y = target_vel_cms.y;
 }
 
+void AC_PrecLand::get_target_velocity_cms(Vector2f& target_vel_cms)
+{
+    if (!(_options & PLND_OPTION_MOVING_TARGET)) {
+        // the target should not be moving
+        target_vel_cms.zero();
+        return;
+    }
+
+    Vector2f target_vel_rel_cms;
+    if (!get_target_velocity_relative_cms(target_vel_rel_cms)) {
+        // Don't know where the target is
+        // assume velocity to be zero
+        target_vel_cms.zero();
+        return;
+    }
+
+    // Vector3f curr_vel;
+    // if (!AP::ahrs().get_velocity_NED(curr_vel)) {
+    //     target_vel_cms.zero();
+    //     return;
+    // }
+    Vector2f curr_vel_xy;
+    // curr_vel_xy = curr_vel.xy();
+    // return the absolute velocity
+    const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
+    curr_vel_xy.x = inertial_data_delayed->inertialNavVelocity.x * 100.0;
+    curr_vel_xy.y = inertial_data_delayed->inertialNavVelocity.y * 100.0;
+
+    gcs().send_text(MAV_SEVERITY_WARNING, "target vel rel cms X : %5.3f", (double)(target_vel_rel_cms[0]));
+    gcs().send_text(MAV_SEVERITY_WARNING, "vehicle velocity cms X : %5.3f", (double)(curr_vel_xy[0]));
+    target_vel_cms  = target_vel_rel_cms + (curr_vel_xy);
+    _target_vel_drone.x = target_vel_cms.x;
+    _target_vel_drone.y = target_vel_cms.y;
+}
+
+
 // handle_msg - Process a LANDING_TARGET mavlink message
 void AC_PrecLand::handle_msg(const mavlink_landing_target_t &packet, uint32_t timestamp_ms)
 {
@@ -506,14 +543,10 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
 
             // Predict
             if (target_acquired()) {
-                _target_pos_rel_est_NE.x += _target_vel_rel_est_NE.x * inertial_data_delayed->dt;
-                _target_pos_rel_est_NE.y += _target_vel_rel_est_NE.y * inertial_data_delayed->dt;
-                _target_vel_rel_est_NE.x = _target_vel_rel_est_NE.x;
-                _target_vel_rel_est_NE.y = _target_vel_rel_est_NE.y;
-                // _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
-                // _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
-                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                _target_pos_rel_est_NE.x -= inertial_data_delayed->inertialNavVelocity.x * inertial_data_delayed->dt;
+                _target_pos_rel_est_NE.y -= inertial_data_delayed->inertialNavVelocity.y * inertial_data_delayed->dt;
+                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
             }
 
             // Update if a new Line-Of-Sight measurement is available
@@ -521,48 +554,11 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
                 if (!_estimator_initialized) {
                     gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: Target Found");
                     _estimator_initialized = true;
-                }
-
-                float a0 = 0.96906992;
-                float b0 = 0.01546504;
-                float b1 = 0.01546504;
-                
-                if(!_low_pass_init_bool)
-                {
-                    _low_pass_filteredXY_prev.x = _target_pos_rel_meas_NED.x;
-                    _low_pass_filteredXY_prev.y = _target_pos_rel_meas_NED.y;
-                    _low_pass_init_bool = true;
-                    // _last_update_ms = AP_HAL::millis();
-                }
-                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: low pass filter");
-
-                
-                // // apply filter
-                _low_pass_filteredXY.x = a0 * _low_pass_filteredXY_prev.x + b0 * _target_pos_rel_meas_NED.x + b1 * _low_pass_targetXY_prev.x;
-                _low_pass_filteredXY.y = a0 * _low_pass_filteredXY_prev.y + b0 * _target_pos_rel_meas_NED.y + b1 * _low_pass_targetXY_prev.y;
-    
-                _low_pass_filteredXYvel.x = (_low_pass_filteredXY.x - _low_pass_filteredXY_prev.x) / (0.04);
-                _low_pass_filteredXYvel.y = (_low_pass_filteredXY.y - _low_pass_filteredXY_prev.y) / (0.04);
-
-                // // apply values
-                _target_pos_rel_est_NE.x = _low_pass_filteredXY.x;
-                _target_pos_rel_est_NE.y = _low_pass_filteredXY.y;
-                _target_vel_rel_est_NE.x = _low_pass_filteredXYvel.x;
-                _target_vel_rel_est_NE.y = _low_pass_filteredXYvel.y;
-                
-
-                // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: update prev values");
-                
-                // // update prev values
-                _low_pass_filteredXY_prev.x = _low_pass_filteredXY.x;
-                _low_pass_filteredXY_prev.y = _low_pass_filteredXY.y;
-                _low_pass_targetXY_prev.x = _target_pos_rel_meas_NED.x;
-                _low_pass_targetXY_prev.y = _target_pos_rel_meas_NED.y;
-                
-                // _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
-                // _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
-                // _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
-                // _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
+                }   
+                _target_pos_rel_est_NE.x = _target_pos_rel_meas_NED.x;
+                _target_pos_rel_est_NE.y = _target_pos_rel_meas_NED.y;
+                _target_vel_rel_est_NE.x = -inertial_data_delayed->inertialNavVelocity.x;
+                _target_vel_rel_est_NE.y = -inertial_data_delayed->inertialNavVelocity.y;
 
                 _last_update_ms = AP_HAL::millis();
                 _target_acquired = true;
@@ -690,40 +686,23 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
 {
     Vector3f target_vec_unit_body;
     if (retrieve_los_meas(target_vec_unit_body)) {
-        // gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: retrive los complete1");
-        const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
-        // gcs().send_text(MAV_SEVERITY_INFO, "target vec valid before bool? %5.3f", (double)(target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body)));
+
+        // const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
+        
         const bool target_vec_valid = target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body) > 0.0f;
-        // gcs().send_text(MAV_SEVERITY_INFO, "target vec valid as bool? %5.3f", (double)(target_vec_valid));
-        const Vector3f target_vec_unit_ned = inertial_data_delayed->Tbn * target_vec_unit_body;
-        const Vector3f approach_vector_NED = inertial_data_delayed->Tbn * _approach_vector_body;
+        
+        const Vector3f target_vec_unit_ned = target_vec_unit_body;
+        
         const bool alt_valid = (rangefinder_alt_valid && rangefinder_alt_m > 0.0f) || (_backend->distance_to_target() > 0.0f);
         if (target_vec_valid && alt_valid) {
-            // distance to target and distance to target along approach vector
-            float dist_to_target, dist_to_target_along_av;
-            // figure out ned camera orientation w.r.t its offset
-            Vector3f cam_pos_ned;
-            if (!_cam_offset.get().is_zero()) {
-                // user has specifed offset for camera
-                // take its height into account while calculating distance
-                cam_pos_ned = inertial_data_delayed->Tbn * _cam_offset;
-            }
+            
+            float dist_to_target = 0.0;
             if (_backend->distance_to_target() > 0.0f) {
                 // sensor has provided distance to landing target
                 dist_to_target = _backend->distance_to_target();
-            } else {
-                // sensor only knows the horizontal location of the landing target
-                // rely on rangefinder for the vertical target
-                dist_to_target_along_av = MAX(rangefinder_alt_m - cam_pos_ned.projected(approach_vector_NED).length(), 0.0f);
-                dist_to_target = dist_to_target_along_av / target_vec_unit_ned.projected(approach_vector_NED).length();
-            }
-
-            // Compute camera position relative to IMU
-            const Vector3f accel_pos_ned = inertial_data_delayed->Tbn * AP::ins().get_imu_pos_offset(AP::ahrs().get_primary_accel_index());
-            const Vector3f cam_pos_ned_rel_imu = cam_pos_ned - accel_pos_ned;
-
+            } 
             // Compute target position relative to IMU
-            _target_pos_rel_meas_NED = (target_vec_unit_ned * dist_to_target) + cam_pos_ned_rel_imu;
+            _target_pos_rel_meas_NED = (target_vec_unit_ned * dist_to_target) ;
 
             // store the current relative down position so that if we need to retry landing, we know at this height landing target can be found
             const AP_AHRS &_ahrs = AP::ahrs();

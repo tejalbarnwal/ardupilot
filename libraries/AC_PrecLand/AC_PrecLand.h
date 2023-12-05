@@ -77,6 +77,8 @@ public:
     // get the absolute velocity of the vehicle
     void get_target_velocity_cms(const Vector2f& vehicle_velocity_cms, Vector2f& target_vel_cms);
 
+    void get_target_velocity_cms(Vector2f& target_vel_cms);
+
     // returns true when the landing target has been detected
     bool target_acquired();
 

@@ -690,7 +690,9 @@ void Mode::land_run_horizontal_control()
             target_pos = inertial_nav.get_position_xy_cm();
         }
          // get the velocity of the target
-        copter.precland.get_target_velocity_cms(inertial_nav.get_velocity_xy_cms(), target_vel);
+        // copter.precland.get_target_velocity_cms(inertial_nav.get_velocity_xy_cms(), target_vel);
+        copter.precland.get_target_velocity_cms(target_vel);
+        
 
         Vector2f zero;
         Vector2p landing_pos = target_pos.topostype();
