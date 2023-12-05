@@ -39,6 +39,8 @@ public:
 
     // get bus parameter
     int8_t get_bus(void) const { return _frontend._bus.get(); }
+
+    virtual bool get_relative_velocity(Vector3f &relative_vel_body) = 0;
     
 protected:
     const AC_PrecLand&  _frontend;          // reference to precision landing front end

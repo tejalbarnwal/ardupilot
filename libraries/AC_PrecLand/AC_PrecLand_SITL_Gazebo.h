@@ -33,6 +33,8 @@ public:
     // return true if there is a valid los measurement available
     bool have_los_meas() override;
 
+    bool get_relative_velocity(Vector3f &relative_vel_body) override;
+
 private:
     AP_IRLock_SITL_Gazebo irlock;
 

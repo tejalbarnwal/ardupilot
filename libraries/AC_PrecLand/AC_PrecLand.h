@@ -194,6 +194,7 @@ private:
     uint32_t                    _outlier_reject_count;  // mini-EKF's outlier counter (3 consecutive outliers lead to EKF accepting updates)
 
     Vector3f                    _target_pos_rel_meas_NED; // target's relative position as 3D vector
+    Vector3f                    _target_vel_rel_meas_NED;
     Vector3f                    _approach_vector_body;   // unit vector in landing approach direction (in body frame)
 
     Vector3f                    _last_target_pos_rel_origin_NED;  // stores the last known location of the target horizontally, and the height of the vehicle where it detected this target in meters NED

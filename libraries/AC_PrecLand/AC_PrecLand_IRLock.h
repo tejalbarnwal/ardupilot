@@ -36,6 +36,8 @@ public:
     // return true if there is a valid los measurement available
     bool have_los_meas() override;
 
+    bool get_relative_velocity(Vector3f &relative_vel_body) override;
+
 private:
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     AP_IRLock_SITL irlock;
