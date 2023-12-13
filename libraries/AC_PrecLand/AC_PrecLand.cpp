@@ -419,6 +419,10 @@ bool AC_PrecLand::get_target_position_cm(Vector2f& ret)
     }
     ret.x = (_target_pos_rel_out_NE.x + curr_pos.x) * 100.0f;   // m to cm
     ret.y = (_target_pos_rel_out_NE.y  + curr_pos.y) * 100.0f;  // m to cm
+
+    // // tejal: READ TARGET POSITION IN EARTH FRAME
+    // ret.x = (_target_pos_rel_out_NE.x) * 100.0f;   // m to cm
+    // ret.y = (_target_pos_rel_out_NE.y) * 100.0f;  // m to cm
     return true;
 }
 
@@ -496,6 +500,7 @@ void AC_PrecLand::get_target_velocity_cms(Vector2f& target_vel_cms)
     //     target_vel_cms.zero();
     //     return;
     // }
+
     Vector2f curr_vel_xy;
     // curr_vel_xy = curr_vel.xy();
     // return the absolute velocity
@@ -508,6 +513,12 @@ void AC_PrecLand::get_target_velocity_cms(Vector2f& target_vel_cms)
     target_vel_cms  = target_vel_rel_cms + (curr_vel_xy);
     _target_vel_drone.x = target_vel_cms.x;
     _target_vel_drone.y = target_vel_cms.y;
+
+    // // TEJAL: read velocity in earth frame directly
+    // target_vel_cms  = target_vel_rel_cms;
+    // _target_vel_drone.x = target_vel_cms.x;
+    // _target_vel_drone.y = target_vel_cms.y;
+
 }
 
 
