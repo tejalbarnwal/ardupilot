@@ -71,6 +71,9 @@ public:
     // returns target position relative to vehicle
     bool get_target_position_relative_cm(Vector2f& ret);
 
+    // return estimated target position
+    bool get_estimated_target_position_cm(Vector2f& ret);
+
     // returns target velocity relative to vehicle
     bool get_target_velocity_relative_cms(Vector2f& ret);
 
@@ -162,6 +165,9 @@ private:
     // results are stored in_target_pos_rel_out_NE, _target_vel_rel_out_NE
     void run_output_prediction();
 
+    // teju
+    void run_setpoint_generator();
+
     // parameters
     AP_Int8                     _enabled;           // enabled/disabled
     AP_Enum<Type>               _type;              // precision landing sensor type
@@ -216,6 +222,8 @@ private:
     bool                        _low_pass_init_bool;
     Vector2f                    _low_pass_filteredXY;
     Vector2f                    _low_pass_filteredXYvel;
+    bool                        _sensor_measurement_update_recieved;
+                 
 
 
     // structure and buffer to hold a history of vehicle velocity

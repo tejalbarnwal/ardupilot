@@ -302,6 +302,7 @@ void AC_PrecLand::update(float rangefinder_alt_cm, bool rangefinder_alt_valid)
     if (_backend != nullptr && _enabled) {
         _backend->update();
         run_estimator(rangefinder_alt_m, rangefinder_alt_valid);
+        _sensor_measurement_update_recieved = false;
     }
 
     // check the status of the landing target location
@@ -417,12 +418,22 @@ bool AC_PrecLand::get_target_position_cm(Vector2f& ret)
     if (!AP::ahrs().get_relative_position_NE_origin(curr_pos)) {
         return false;
     }
-    ret.x = (_target_pos_rel_out_NE.x + curr_pos.x) * 100.0f;   // m to cm
-    ret.y = (_target_pos_rel_out_NE.y  + curr_pos.y) * 100.0f;  // m to cm
+    // ret.x = (_target_pos_rel_out_NE.x + curr_pos.x) * 100.0f;   // m to cm
+    // ret.y = (_target_pos_rel_out_NE.y  + curr_pos.y) * 100.0f;  // m to cm
 
-    // // tejal: READ TARGET POSITION IN EARTH FRAME
-    // ret.x = (_target_pos_rel_out_NE.x) * 100.0f;   // m to cm
-    // ret.y = (_target_pos_rel_out_NE.y) * 100.0f;  // m to cm
+    // tejal: READ TARGET POSITION IN EARTH FRAME
+    ret.x = (_target_pos_rel_out_NE.x) * 100.0f;   // m to cm
+    ret.y = (_target_pos_rel_out_NE.y) * 100.0f;  // m to cm
+    return true;
+}
+
+bool AC_PrecLand::get_estimated_target_position_cm(Vector2f& ret)
+{
+    if (!target_acquired()) {
+        return false;
+    }
+    ret.x = (_target_pos_rel_est_NE.x) * 100.0f;
+    ret.y = (_target_pos_rel_est_NE.y) * 100.0f;
     return true;
 }
 
@@ -501,23 +512,23 @@ void AC_PrecLand::get_target_velocity_cms(Vector2f& target_vel_cms)
     //     return;
     // }
 
-    Vector2f curr_vel_xy;
-    // curr_vel_xy = curr_vel.xy();
-    // return the absolute velocity
-    const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
-    curr_vel_xy.x = inertial_data_delayed->inertialNavVelocity.x * 100.0;
-    curr_vel_xy.y = inertial_data_delayed->inertialNavVelocity.y * 100.0;
+    // Vector2f curr_vel_xy;
+    // // curr_vel_xy = curr_vel.xy();
+    // // return the absolute velocity
+    // const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
+    // curr_vel_xy.x = inertial_data_delayed->inertialNavVelocity.x * 100.0;
+    // curr_vel_xy.y = inertial_data_delayed->inertialNavVelocity.y * 100.0;
 
-    gcs().send_text(MAV_SEVERITY_WARNING, "target vel rel cms X : %5.3f", (double)(target_vel_rel_cms[0]));
-    gcs().send_text(MAV_SEVERITY_WARNING, "vehicle velocity cms X : %5.3f", (double)(curr_vel_xy[0]));
-    target_vel_cms  = target_vel_rel_cms + (curr_vel_xy);
-    _target_vel_drone.x = target_vel_cms.x;
-    _target_vel_drone.y = target_vel_cms.y;
-
-    // // TEJAL: read velocity in earth frame directly
-    // target_vel_cms  = target_vel_rel_cms;
+    // gcs().send_text(MAV_SEVERITY_WARNING, "target vel rel cms X : %5.3f", (double)(target_vel_rel_cms[0]));
+    // gcs().send_text(MAV_SEVERITY_WARNING, "vehicle velocity cms X : %5.3f", (double)(curr_vel_xy[0]));
+    // target_vel_cms  = target_vel_rel_cms + (curr_vel_xy);
     // _target_vel_drone.x = target_vel_cms.x;
     // _target_vel_drone.y = target_vel_cms.y;
+
+    // TEJAL: read velocity in earth frame directly
+    target_vel_cms  = target_vel_rel_cms;
+    _target_vel_drone.x = target_vel_cms.x;
+    _target_vel_drone.y = target_vel_cms.y;
 
 }
 
@@ -562,6 +573,7 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
 
             // Update if a new Line-Of-Sight measurement is available
             if (construct_pos_meas_using_rangefinder(rangefinder_alt_m, rangefinder_alt_valid)) {
+                _sensor_measurement_update_recieved = true;
                 if (!_estimator_initialized) {
                     gcs().send_text(MAV_SEVERITY_INFO, "PrecLand: Target Found");
                     _estimator_initialized = true;
@@ -580,7 +592,22 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
             // Output prediction
             if (target_acquired()) {
                 run_output_prediction();
+                run_setpoint_generator();
             }
+
+            // if (_sensor_measurement_update_recieved)
+            // {
+            //     // we plan a new trajectory
+            //     setpoint_counter = 1;
+            // }
+            // else
+            // {
+            //     // we give the next setpoint in the trajectory
+            //     // count can go from 1 to num_setpoints
+            //     setpoint_counter += 1;
+            // }
+            // run_setpoint_generator(setpoint_counter);
+
             break;
         }
         case EstimatorType::KALMAN_FILTER: {
@@ -703,13 +730,17 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
         _backend->get_relative_velocity(target_relative_vel_body);
 
         // const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
-        
-        const bool target_vec_valid = target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body) > 0.0f;
+        // do we need this? // find about this
+        // const bool target_vec_valid = target_vec_unit_body.projected(_approach_vector_body).dot(_approach_vector_body) > 0.0f;
         
         const Vector3f target_vec_unit_ned = target_vec_unit_body;
         
         const bool alt_valid = (rangefinder_alt_valid && rangefinder_alt_m > 0.0f) || (_backend->distance_to_target() > 0.0f);
-        if (target_vec_valid && alt_valid) {
+
+        // gcs().send_text(MAV_SEVERITY_WARNING, "plnd, target vec valid??: %5.3f", (double)(target_vec_valid));
+        gcs().send_text(MAV_SEVERITY_WARNING, "plnd, alt valid??: %5.3f", (double)(alt_valid));
+
+        if (alt_valid) {
             
             float dist_to_target = 0.0;
             if (_backend->distance_to_target() > 0.0f) {
@@ -737,8 +768,9 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
 
 void AC_PrecLand::run_output_prediction()
 {
-    _target_pos_rel_out_NE = _target_pos_rel_est_NE;
-    _target_vel_rel_out_NE = _target_vel_rel_est_NE;
+    // teju
+    // _target_pos_rel_out_NE = _target_pos_rel_est_NE;
+    // _target_vel_rel_out_NE = _target_vel_rel_est_NE;
 
     // gcs().send_text(MAV_SEVERITY_INFO, "plnd1: target pose rel out NE X: %5.3f", (double)(_target_pos_rel_out_NE[0]));
     // gcs().send_text(MAV_SEVERITY_INFO, "plnd1: target pose rel out NE Y: %5.3f", (double)(_target_pos_rel_out_NE[1]));
@@ -786,6 +818,71 @@ void AC_PrecLand::run_output_prediction()
     // record the last time there was a target output
     _last_valid_target_ms = AP_HAL::millis();
 }
+
+
+// setpoint gen
+void AC_PrecLand::run_setpoint_generator()
+{
+    // take target setpoint from estimator and current pos and vel of the drone
+    // continuously make the target go in that direction
+    // _target_pos_rel_out_NE
+    // _target_vel_rel_out_NE 
+    
+    // we call this function inside mode.cpp in order to run small trajectory generator and then think about what we do with the same
+    
+    // call current pose of the drone
+    Vector2f curr_pos;
+    bool curr_pos_available = AP::ahrs().get_relative_position_NE_origin(curr_pos);
+    // we have final pose of the drone on pos_rel_out_NE
+    if (curr_pos_available)
+    {
+        // we linearly interpolate
+        // gcs().send_text(MAV_SEVERITY_WARNING, "before1");
+        // int num_setpoints = 50;
+        // int num_setpoints = (int)((abs((double)(_target_pos_rel_est_NE.x - curr_pos.x))+abs((double)(_target_pos_rel_est_NE.y - curr_pos.y))) * 2000);
+        double distance = sqrt(sq((double)(_target_pos_rel_est_NE.x - curr_pos.x))+sq((double)(_target_pos_rel_est_NE.y - curr_pos.y)));
+        int num_setpoints = (int)(distance/ 0.05);
+
+        gcs().send_text(MAV_SEVERITY_WARNING, "target num setpoints : %5.3f", (double)(num_setpoints));
+        // gcs().send_text(MAV_SEVERITY_WARNING, "before2");
+
+        // gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms X : %5.3f", (double)(num_setpoints));
+        Vector2f setpoint_pose_to_give;
+        double update_dt = 1.0/ 400.0;
+        if(num_setpoints > 0 )
+        {
+            setpoint_pose_to_give = ((_target_pos_rel_est_NE - curr_pos) / num_setpoints) + curr_pos ;
+        }
+        else
+        {
+            setpoint_pose_to_give.x = (_target_pos_rel_est_NE - curr_pos).x + curr_pos.x;
+            setpoint_pose_to_give.y = (_target_pos_rel_est_NE - curr_pos).y + curr_pos.y;
+        }
+        
+
+        
+        gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms X : %5.3f", (double)(setpoint_pose_to_give[0]));
+        gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms Y : %5.3f", (double)(setpoint_pose_to_give[1]));
+
+
+        // we derive velocity out of it
+        Vector2f setpoint_vel_to_give = ((setpoint_pose_to_give - curr_pos) / update_dt) ;
+        double vel_mag = sqrt(sq(setpoint_vel_to_give.x)+sq(setpoint_vel_to_give.y));
+        double MAX_VEL_MAG = 0.3;
+        if (vel_mag > MAX_VEL_MAG)
+        {
+            setpoint_vel_to_give = (setpoint_vel_to_give / vel_mag) * MAX_VEL_MAG;
+        }
+        
+
+
+        // we set the target_pos_rel and target_vel_rel
+        _target_pos_rel_out_NE = setpoint_pose_to_give;
+        _target_vel_rel_out_NE = setpoint_vel_to_give;
+    }
+    
+}
+
 
 // Write a precision landing entry
 void AC_PrecLand::Write_Precland()
