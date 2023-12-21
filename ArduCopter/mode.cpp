@@ -602,7 +602,7 @@ void Mode::land_run_vertical_control(bool pause_descent)
             // prec landing is active
             Vector2f target_pos;
             float target_error_cm = 0.0f;
-            if (copter.precland.get_target_position_cm(target_pos)) {
+            if (copter.precland.get_estimated_target_position_cm(target_pos)) {
                 const Vector2f current_pos = inertial_nav.get_position_xy_cm();
                 // target is this many cm away from the vehicle
                 target_error_cm = (target_pos - current_pos).length();
