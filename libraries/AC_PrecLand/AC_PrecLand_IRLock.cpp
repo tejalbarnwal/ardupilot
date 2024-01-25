@@ -45,6 +45,14 @@ bool AC_PrecLand_IRLock::get_relative_velocity(Vector3f& ret){
     return false;
 }
 
+bool AC_PrecLand_IRLock::get_setpoint_pose(Vector2f& ret){
+    return false;
+}
+
+bool AC_PrecLand_IRLock::get_setpoint_vel(Vector2f& ret){
+    return false;
+}
+
 // returns system time in milliseconds of last los measurement
 uint32_t AC_PrecLand_IRLock::los_meas_time_ms() {
     return _los_meas_time_ms;

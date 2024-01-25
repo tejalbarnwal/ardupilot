@@ -37,6 +37,10 @@ public:
 
     bool get_relative_velocity(Vector3f &relative_vel_body) override;
 
+    bool get_setpoint_pose(Vector2f &ret) override;
+
+    bool get_setpoint_vel(Vector2f &ret) override;
+
 private:
     SITL::SIM           *_sitl;                 // sitl instance pointer
     Vector3f            _los_meas_body;         // unit vector in body frame pointing towards target

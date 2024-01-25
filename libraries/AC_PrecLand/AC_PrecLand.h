@@ -168,6 +168,12 @@ private:
     // teju
     void run_setpoint_generator();
 
+    Vector3f calculate_T1_T2_T3_setpoint_generator(double p_v,
+                                            double V,
+                                            double A,
+                                            double g_p,
+                                            double p_p) ;
+
     // parameters
     AP_Int8                     _enabled;           // enabled/disabled
     AP_Enum<Type>               _type;              // precision landing sensor type
@@ -223,6 +229,20 @@ private:
     Vector2f                    _low_pass_filteredXY;
     Vector2f                    _low_pass_filteredXYvel;
     bool                        _sensor_measurement_update_recieved;
+
+    float MAX_VEL;
+    float MAX_ACC;
+
+    bool SETPOINT_GEN_STATE_ACC;
+    bool SETPOINT_GEN_STATE_CONST_VEL;
+    bool SETPOINT_GEN_STATE_DCC;
+
+    bool run_setpoint_gen_first_time;
+
+    Vector2f setpoint_pose_to_give;
+    Vector2f setpoint_vel_to_give;
+
+    Vector3f time_setpoint_gen;
                  
 
 

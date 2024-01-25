@@ -58,5 +58,13 @@ bool AC_PrecLand_SITL::get_relative_velocity(Vector3f& ret){
     return false;
 }
 
+bool AC_PrecLand_SITL::get_setpoint_pose(Vector2f& ret){
+    return false;
+}
+
+bool AC_PrecLand_SITL::get_setpoint_vel(Vector2f& ret){
+    return false;
+}
+
 
 #endif

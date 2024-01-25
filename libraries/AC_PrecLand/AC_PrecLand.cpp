@@ -232,7 +232,7 @@ void AC_PrecLand::init(uint16_t update_rate_hz)
 
     // tejal
     gcs().send_text(MAV_SEVERITY_INFO, "Plnd: instantiate backend");
-    gcs().send_text(MAV_SEVERITY_INFO, "is type backend companion? %5.3f", (double)(((Type)(_type.get())) == (Type::COMPANION)));
+    gcs().send_text(MAV_SEVERITY_INFO, "is type backend companion1? %5.3f", (double)(((Type)(_type.get())) == (Type::COMPANION)));
 
     // instantiate backend based on type parameter
     switch ((Type)(_type.get())) {
@@ -259,6 +259,7 @@ void AC_PrecLand::init(uint16_t update_rate_hz)
     }
 
     //tejal
+    gcs().send_text(MAV_SEVERITY_INFO, "is type backend companion2? %5.3f", (double)(((Type)(_type.get())) == (Type::COMPANION)));
     gcs().send_text(MAV_SEVERITY_INFO, "is backend equal to null? %5.3f", (double)(_backend == nullptr));
 
     // init backend
@@ -268,6 +269,15 @@ void AC_PrecLand::init(uint16_t update_rate_hz)
 
     _approach_vector_body.x = 1;
     _approach_vector_body.rotate(_orient);
+
+    // might have to change in order to use it when PL re triggers!!
+    MAX_VEL = 0.5;
+    MAX_ACC = 0.4;
+
+    SETPOINT_GEN_STATE_ACC = true;
+    SETPOINT_GEN_STATE_CONST_VEL = true;
+    SETPOINT_GEN_STATE_DCC = true;
+    run_setpoint_gen_first_time = true;
 }
 
 // update - give chance to driver to get updates from sensor
@@ -592,7 +602,7 @@ void AC_PrecLand::run_estimator(float rangefinder_alt_m, bool rangefinder_alt_va
             // Output prediction
             if (target_acquired()) {
                 run_output_prediction();
-                run_setpoint_generator();
+                // run_setpoint_generator();
             }
 
             // if (_sensor_measurement_update_recieved)
@@ -726,8 +736,11 @@ bool AC_PrecLand::construct_pos_meas_using_rangefinder(float rangefinder_alt_m, 
 {
     Vector3f target_vec_unit_body;
     Vector3f target_relative_vel_body;
+
     if (retrieve_los_meas(target_vec_unit_body)) {
         _backend->get_relative_velocity(target_relative_vel_body);
+        _backend->get_setpoint_pose(setpoint_pose_to_give);
+        _backend->get_setpoint_vel(setpoint_vel_to_give);
 
         // const struct inertial_data_frame_s *inertial_data_delayed = (*_inertial_history)[0];
         // do we need this? // find about this
@@ -771,6 +784,8 @@ void AC_PrecLand::run_output_prediction()
     // teju
     // _target_pos_rel_out_NE = _target_pos_rel_est_NE;
     // _target_vel_rel_out_NE = _target_vel_rel_est_NE;
+    _target_pos_rel_out_NE = setpoint_pose_to_give;
+    _target_vel_rel_out_NE = setpoint_vel_to_give;
 
     // gcs().send_text(MAV_SEVERITY_INFO, "plnd1: target pose rel out NE X: %5.3f", (double)(_target_pos_rel_out_NE[0]));
     // gcs().send_text(MAV_SEVERITY_INFO, "plnd1: target pose rel out NE Y: %5.3f", (double)(_target_pos_rel_out_NE[1]));
@@ -820,67 +835,95 @@ void AC_PrecLand::run_output_prediction()
 }
 
 
+Vector3f AC_PrecLand::calculate_T1_T2_T3_setpoint_generator(double p_v,
+                                                        double V,
+                                                        double A,
+                                                        double g_p,
+                                                        double p_p)
+{
+    double T1 = ((V - p_v) / A) * SETPOINT_GEN_STATE_ACC;
+    double T3 = V/A * SETPOINT_GEN_STATE_DCC;
+    double T2 = ((g_p - p_p) - 0.5 * A * (sq(T1) + sq(T3))) * SETPOINT_GEN_STATE_CONST_VEL;
+    // double D = g_p - p_p;
+
+    if (T1 <= 0.0)
+    {
+        T1 = 0.0;
+        SETPOINT_GEN_STATE_ACC = false;
+        if (T2 <= 0.0)
+        {
+            T2 = 0.0;
+            SETPOINT_GEN_STATE_CONST_VEL = false;
+            T3 = p_v / A * SETPOINT_GEN_STATE_DCC;
+            if (T3 <= 0.0)
+            {
+                SETPOINT_GEN_STATE_DCC = false;
+            }
+        }
+    }
+    Vector3f time;
+    time.x = T1;
+    time.y = T2;
+    time.z = T3;
+
+    return time;
+}
+
+
 // setpoint gen
 void AC_PrecLand::run_setpoint_generator()
 {
-    // take target setpoint from estimator and current pos and vel of the drone
-    // continuously make the target go in that direction
-    // _target_pos_rel_out_NE
-    // _target_vel_rel_out_NE 
-    
-    // we call this function inside mode.cpp in order to run small trajectory generator and then think about what we do with the same
-    
-    // call current pose of the drone
-    Vector2f curr_pos;
-    bool curr_pos_available = AP::ahrs().get_relative_position_NE_origin(curr_pos);
-    // we have final pose of the drone on pos_rel_out_NE
-    if (curr_pos_available)
-    {
-        // we linearly interpolate
-        // gcs().send_text(MAV_SEVERITY_WARNING, "before1");
-        // int num_setpoints = 50;
-        // int num_setpoints = (int)((abs((double)(_target_pos_rel_est_NE.x - curr_pos.x))+abs((double)(_target_pos_rel_est_NE.y - curr_pos.y))) * 2000);
-        double distance = sqrt(sq((double)(_target_pos_rel_est_NE.x - curr_pos.x))+sq((double)(_target_pos_rel_est_NE.y - curr_pos.y)));
-        int num_setpoints = (int)(distance/ 0.05);
-
-        gcs().send_text(MAV_SEVERITY_WARNING, "target num setpoints : %5.3f", (double)(num_setpoints));
-        // gcs().send_text(MAV_SEVERITY_WARNING, "before2");
-
-        // gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms X : %5.3f", (double)(num_setpoints));
-        Vector2f setpoint_pose_to_give;
-        double update_dt = 1.0/ 400.0;
-        if(num_setpoints > 0 )
+   gcs().send_text(MAV_SEVERITY_INFO, "plnd1: : setpoint gen");
+   if (run_setpoint_gen_first_time)
+   {
+        // assume initial velocity is 0
+        Vector2f curr_pos;
+        bool curr_pos_available = AP::ahrs().get_relative_position_NE_origin(curr_pos);
+        if (curr_pos_available)
         {
-            setpoint_pose_to_give = ((_target_pos_rel_est_NE - curr_pos) / num_setpoints) + curr_pos ;
+            setpoint_pose_to_give.x = curr_pos.x;
+            setpoint_pose_to_give.y = curr_pos.y;
         }
-        else
+        run_setpoint_gen_first_time = false;
+   }
+
+   float DELTA = 0.05;
+   float DELTA_T = 0.05;
+
+
+
+   if((abs(_target_pos_rel_est_NE.x - setpoint_pose_to_give.x) > DELTA) || (time_setpoint_gen.z > 0.0))
+   {
+        gcs().send_text(MAV_SEVERITY_INFO, "plnd1: : calculate time for setpoint gen");
+        time_setpoint_gen = calculate_T1_T2_T3_setpoint_generator(setpoint_vel_to_give.x,
+                                                                    MAX_VEL,
+                                                                    MAX_ACC,
+                                                                    _target_pos_rel_est_NE.x,
+                                                                    setpoint_pose_to_give.x);
+        if (time_setpoint_gen.x > 0.0)
         {
-            setpoint_pose_to_give.x = (_target_pos_rel_est_NE - curr_pos).x + curr_pos.x;
-            setpoint_pose_to_give.y = (_target_pos_rel_est_NE - curr_pos).y + curr_pos.y;
+            setpoint_pose_to_give.x = setpoint_vel_to_give.x * DELTA_T + 0.5 * MAX_ACC * DELTA_T * DELTA_T + setpoint_pose_to_give.x;
+            setpoint_vel_to_give.x = MAX_ACC * DELTA_T + setpoint_vel_to_give.x;
+            setpoint_pose_to_give.y = 0.0 ;
+            setpoint_vel_to_give.y = 0.0 ;
         }
-        
 
-        
-        gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms X : %5.3f", (double)(setpoint_pose_to_give[0]));
-        gcs().send_text(MAV_SEVERITY_WARNING, "target pos ms Y : %5.3f", (double)(setpoint_pose_to_give[1]));
-
-
-        // we derive velocity out of it
-        Vector2f setpoint_vel_to_give = ((setpoint_pose_to_give - curr_pos) / update_dt) ;
-        double vel_mag = sqrt(sq(setpoint_vel_to_give.x)+sq(setpoint_vel_to_give.y));
-        double MAX_VEL_MAG = 0.3;
-        if (vel_mag > MAX_VEL_MAG)
+        else if ((time_setpoint_gen.x <= 0.0) && (time_setpoint_gen.y > 0.0))
         {
-            setpoint_vel_to_give = (setpoint_vel_to_give / vel_mag) * MAX_VEL_MAG;
+            setpoint_pose_to_give.x = MAX_VEL * DELTA_T + setpoint_pose_to_give.x;
+            setpoint_vel_to_give.x = MAX_VEL;
+            setpoint_pose_to_give.y = 0.0 ;
+            setpoint_vel_to_give.y = 0.0 ;
         }
-        
 
-
-        // we set the target_pos_rel and target_vel_rel
-        _target_pos_rel_out_NE = setpoint_pose_to_give;
-        _target_vel_rel_out_NE = setpoint_vel_to_give;
-    }
-    
+        else if ((time_setpoint_gen.x <= 0.0)and (time_setpoint_gen.y <= 0.0) and (time_setpoint_gen.z > 0.0))
+        {
+            setpoint_pose_to_give.x = setpoint_vel_to_give.x * DELTA_T - 0.5 * MAX_ACC * DELTA_T * DELTA_T + setpoint_pose_to_give.x;
+            setpoint_vel_to_give.x = (-1 * MAX_ACC * DELTA_T) + setpoint_vel_to_give.x;
+            setpoint_pose_to_give.y = 0.0 ;
+            setpoint_vel_to_give.y = 0.0 ;
+        }
+   }
 }
 
 

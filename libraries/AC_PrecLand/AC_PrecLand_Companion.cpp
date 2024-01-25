@@ -34,6 +34,22 @@ bool AC_PrecLand_Companion::get_relative_velocity(Vector3f& ret){
     return false;
 }
 
+bool AC_PrecLand_Companion::get_setpoint_pose(Vector2f &ret){
+    if (have_los_meas()){
+        ret = _setpoint_pose;
+        return true;
+    }
+    return false;
+}
+
+bool AC_PrecLand_Companion::get_setpoint_vel(Vector2f &ret){
+    if (have_los_meas()){
+        ret = _setpoint_vel;
+        return true;
+    }
+    return false;
+}
+
 // returns system time in milliseconds of last los measurement
 uint32_t AC_PrecLand_Companion::los_meas_time_ms() {
     return _los_meas_time_ms;
@@ -61,6 +77,13 @@ void AC_PrecLand_Companion::handle_msg(const mavlink_landing_target_t &packet, u
                 _los_meas_body = Vector3f(packet.x, packet.y, packet.z);
                 _los_meas_body /= _distance_to_target;
                 _relative_velocity_meas_body = Vector3f(packet.angle_x, packet.angle_y, 0.0);
+                _setpoint_pose = Vector2f(packet.q[0], packet.q[2]);
+                _setpoint_vel = Vector2f(packet.q[1], packet.q[3]);
+                gcs().send_text(MAV_SEVERITY_WARNING, "packet 0 ??: %5.3f", (double)(packet.q[0]));
+                gcs().send_text(MAV_SEVERITY_WARNING, "packet 1 ??: %5.3f", (double)(packet.q[1]));
+                gcs().send_text(MAV_SEVERITY_WARNING, "packet 2 ??: %5.3f", (double)(packet.q[2]));
+                gcs().send_text(MAV_SEVERITY_WARNING, "packet 3 ??: %5.3f", (double)(packet.q[3]));
+
             } else {
                 // distance to target must be positive
                 return;

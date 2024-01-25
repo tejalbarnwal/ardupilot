@@ -40,6 +40,10 @@ public:
 
     bool get_relative_velocity(Vector3f &relative_vel_body) override;
 
+    bool get_setpoint_pose(Vector2f &ret) override;
+
+    bool get_setpoint_vel(Vector2f &ret) override;
+
 private:
     float               _distance_to_target;    // distance from the camera to target in meters
 
@@ -48,4 +52,7 @@ private:
     uint32_t            _los_meas_time_ms;      // system time in milliseconds when los was measured
     bool                _wrong_frame_msg_sent;
     Vector3f            _relative_velocity_meas_body;
+
+    Vector2f            _setpoint_pose;
+    Vector2f            _setpoint_vel;
 };

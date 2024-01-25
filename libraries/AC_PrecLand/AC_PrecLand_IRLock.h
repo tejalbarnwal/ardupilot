@@ -38,6 +38,10 @@ public:
 
     bool get_relative_velocity(Vector3f &relative_vel_body) override;
 
+    bool get_setpoint_pose(Vector2f &ret) override;
+
+    bool get_setpoint_vel(Vector2f &ret) override;
+
 private:
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     AP_IRLock_SITL irlock;
